@@ -1,0 +1,1071 @@
+# rubiks-solver
+# requires Python 2.7 and Pygame
+
+# """ WELCOME TO THE CUBE SOLVER """
+# __author__ = 'Wesley Williams'
+
+import pygame
+import sys
+from random import randint
+import os
+
+# each index of cube represents the location of a sticker, whose color is represented by an integer
+# each edge and corner can be identified by multiplying its stickers to each other (referred to as edge/corner ID)
+cube = [1, 2, 3, 4, 5, 7,  # 6 centers, 1 sticker each
+        1, 2, 1, 3, 1, 4, 1, 5, 2, 3, 3, 4, 4, 5, 5, 2, 7, 2, 7, 3, 7, 4, 7, 5,  # 12 edges, 2 stickers each
+        1, 2, 3, 1, 3, 4, 1, 4, 5, 1, 5, 2, 7, 2, 3, 7, 3, 4, 7, 4, 5, 7, 5, 2]  # 8 corners, 3 stickers each
+algorithm = []  # stores an algorithm to mix up the puzzle
+solution = []  # this original orientation solution algorithm will be printed at end
+original_faces = {1: "Up", 2: "Front", 3: "Right", 4: "Back", 5: "Left", 7: "Down"}
+
+color_abbreviations = {}
+cube_colors = {}
+
+os.environ['SDL_VIDEO_CENTERED'] = '1'
+pygame.display.init()
+move_clock = pygame.time.Clock()
+
+FPS = 12  # this is the number of moves per second displayed in the solving process
+the_stickers = 30  # this is how big each sticker is on the 2D display cube
+cube_width = 250  # this is how much space the 3D display cube takes up on screen
+shift_right = cube_width  # represents the gap between the 2D cube and the left of screen
+shift_down = 0  # represents the gap between the 2D cube and the top of screen
+
+if the_stickers * 20 + shift_right > cube_width:
+    screen_width = the_stickers * 20 + shift_right
+else:
+    screen_width = cube_width
+if the_stickers * 15 + shift_down > cube_width + 50:
+    screen_height = the_stickers * 15 + shift_down
+else:
+    screen_height = cube_width + 50  # the buttons are 50 pixels tall
+
+cell = [0]  # index 0 occupied to make relevant values begin at index 1
+for cell_num in range(12):
+    cell.append(the_stickers / 2.0 * (1 + 3 * (cell_num % 3) + 10 * (cell_num / 3)))
+    # cell array creates positions of stickers based on sticker_size so they are neatly spaced apart
+
+x_cell = []
+y_cell = []
+for pos in cell:
+    x_cell.append(pos + shift_right)
+    y_cell.append(pos + shift_down)
+
+
+# draw_cube() draws two representations of the current state of the puzzle, and displays it
+def draw_cube():
+    pygame.draw.polygon(cube_show, cube_colors[cube[51]], [(25, 240), (45, 220), (85, 220), (65, 240)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[22]], [(75, 240), (95, 220), (135, 220), (115, 240)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[42]], [(125, 240), (145, 220), (185, 220), (165, 240)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[28]], [(50, 215), (70, 195), (110, 195), (90, 215)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[5]], [(100, 215), (120, 195), (160, 195), (140, 215)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[24]], [(150, 215), (170, 195), (210, 195), (190, 215)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[48]],  [(75, 190), (95, 170), (135, 170), (115, 190)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[26]], [(125, 190), (145, 170), (185, 170), (165, 190)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[45]], [(175, 190), (195, 170), (235, 170), (215, 190)])
+    
+    pygame.draw.polygon(cube_show, cube_colors[cube[38]], [(65, 80), (65, 40), (85, 20), (85, 60)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[13]], [(40, 105), (40, 65), (60, 45), (60, 85)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[40]], [(15, 130), (15, 90), (35, 70), (35, 110)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[19]], [(65, 130), (65, 90), (85, 70), (85, 110)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[4]], [(40, 155), (40, 115), (60, 95), (60, 135)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[20]], [(15, 180), (15, 140), (35, 120), (35, 160)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[50]], [(65, 180), (65, 140), (85, 120), (85, 160)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[29]], [(40, 205), (40, 165), (60, 145), (60, 185)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[52]], [(15, 230), (15, 190), (35, 170), (35, 210)])
+    
+    pygame.draw.rect(cube_show, cube_colors[cube[35]], (195, 20, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[11]], (145, 20, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[37]], (95, 20, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[17]], (195, 70, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[3]], (145, 70, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[18]], (95, 70, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[47]], (195, 120, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[27]], (145, 120, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[49]], (95, 120, 40, 40))
+    
+    pygame.draw.polygon(cube_show, cube_colors[cube[32]], [(170, 130), (170, 90), (190, 70), (190, 110)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[9]], [(195, 105), (195, 65), (215, 45), (215, 85)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[34]], [(220, 80), (220, 40), (240, 20), (240, 60)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[15]], [(170, 180), (170, 140), (190, 120), (190, 160)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[2]], [(195, 155), (195, 115), (215, 95), (215, 135)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[16]], [(220, 130), (220, 90), (240, 70), (240, 110)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[44]], [(170, 230), (170, 190), (190, 170), (190, 210)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[25]], [(195, 205), (195, 165), (215, 145), (215, 185)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[46]], [(220, 180), (220, 140), (240, 120), (240, 160)])
+    
+    pygame.draw.rect(cube_show, cube_colors[cube[41]], (20, 95, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[7]], (70, 95, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[31]], (120, 95, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[21]], (20, 145, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[1]], (70, 145, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[14]], (120, 145, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[53]], (20, 195, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[23]], (70, 195, 40, 40))
+    pygame.draw.rect(cube_show, cube_colors[cube[43]], (120, 195, 40, 40))
+    
+    pygame.draw.polygon(cube_show, cube_colors[cube[36]], [(75, 35), (95, 15), (135, 15), (115, 35)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[10]], [(125, 35), (145, 15), (185, 15), (165, 35)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[33]], [(175, 35), (195, 15), (235, 15), (215, 35)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[12]], [(50, 60), (70, 40), (110, 40), (90, 60)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[0]], [(100, 60), (120, 40), (160, 40), (140, 60)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[8]], [(150, 60), (170, 40), (210, 40), (190, 60)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[39]], [(25, 85), (45, 65), (85, 65), (65, 85)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[6]], [(75, 85), (95, 65), (135, 65), (115, 85)])
+    pygame.draw.polygon(cube_show, cube_colors[cube[30]], [(125, 85), (145, 65), (185, 65), (165, 85)])
+    
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(170, 130), (170, 90), (190, 70), (190, 110)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(195, 105), (195, 65), (215, 45), (215, 85)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(220, 80), (220, 40), (240, 20), (240, 60)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(170, 180), (170, 140), (190, 120), (190, 160)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(195, 155), (195, 115), (215, 95), (215, 135)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(220, 130), (220, 90), (240, 70), (240, 110)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(170, 230), (170, 190), (190, 170), (190, 210)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(195, 205), (195, 165), (215, 145), (215, 185)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(220, 180), (220, 140), (240, 120), (240, 160)], 1)
+    
+    pygame.draw.rect(cube_show, (0, 0, 0), (20, 95, 40, 40), 1)
+    pygame.draw.rect(cube_show, (0, 0, 0), (70, 95, 40, 40), 1)
+    pygame.draw.rect(cube_show, (0, 0, 0), (120, 95, 40, 40), 1)
+    pygame.draw.rect(cube_show, (0, 0, 0), (20, 145, 40, 40), 1)
+    pygame.draw.rect(cube_show, (0, 0, 0), (70, 145, 40, 40), 1)
+    pygame.draw.rect(cube_show, (0, 0, 0), (120, 145, 40, 40), 1)
+    pygame.draw.rect(cube_show, (0, 0, 0), (20, 195, 40, 40), 1)
+    pygame.draw.rect(cube_show, (0, 0, 0), (70, 195, 40, 40), 1)
+    pygame.draw.rect(cube_show, (0, 0, 0), (120, 195, 40, 40), 1)
+    
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(75, 35), (95, 15), (135, 15), (115, 35)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(125, 35), (145, 15), (185, 15), (165, 35)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(175, 35), (195, 15), (235, 15), (215, 35)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(50, 60), (70, 40), (110, 40), (90, 60)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(100, 60), (120, 40), (160, 40), (140, 60)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(150, 60), (170, 40), (210, 40), (190, 60)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(25, 85), (45, 65), (85, 65), (65, 85)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(75, 85), (95, 65), (135, 65), (115, 85)], 1)
+    pygame.draw.polygon(cube_show, (0, 0, 0), [(125, 85), (145, 65), (185, 65), (165, 85)], 1)
+    
+    pygame.draw.rect(cube_show, cube_colors[cube[36]], (x_cell[4], y_cell[1], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[10]], (x_cell[5], y_cell[1], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[33]], (x_cell[6], y_cell[1], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[12]], (x_cell[4], y_cell[2], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[0]], (x_cell[5], y_cell[2], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[8]], (x_cell[6], y_cell[2], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[39]], (x_cell[4], y_cell[3], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[6]], (x_cell[5], y_cell[3], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[30]], (x_cell[6], y_cell[3], the_stickers, the_stickers))
+    
+    pygame.draw.rect(cube_show, cube_colors[cube[41]], (x_cell[4], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[7]], (x_cell[5], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[31]], (x_cell[6], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[21]], (x_cell[4], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[1]], (x_cell[5], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[14]], (x_cell[6], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[53]], (x_cell[4], y_cell[6], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[23]], (x_cell[5], y_cell[6], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[43]], (x_cell[6], y_cell[6], the_stickers, the_stickers))
+    
+    pygame.draw.rect(cube_show, cube_colors[cube[32]], (x_cell[7], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[9]], (x_cell[8], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[34]], (x_cell[9], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[15]], (x_cell[7], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[2]], (x_cell[8], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[16]], (x_cell[9], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[44]], (x_cell[7], y_cell[6], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[25]], (x_cell[8], y_cell[6], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[46]], (x_cell[9], y_cell[6], the_stickers, the_stickers))
+    
+    pygame.draw.rect(cube_show, cube_colors[cube[35]], (x_cell[10], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[11]], (x_cell[11], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[37]], (x_cell[12], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[17]], (x_cell[10], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[3]], (x_cell[11], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[18]], (x_cell[12], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[47]], (x_cell[10], y_cell[6], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[27]], (x_cell[11], y_cell[6], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[49]], (x_cell[12], y_cell[6], the_stickers, the_stickers))
+    
+    pygame.draw.rect(cube_show, cube_colors[cube[38]], (x_cell[1], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[13]], (x_cell[2], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[40]], (x_cell[3], y_cell[4], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[19]], (x_cell[1], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[4]], (x_cell[2], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[20]], (x_cell[3], y_cell[5], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[50]], (x_cell[1], y_cell[6], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[29]], (x_cell[2], y_cell[6], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[52]], (x_cell[3], y_cell[6], the_stickers, the_stickers))
+    
+    pygame.draw.rect(cube_show, cube_colors[cube[51]], (x_cell[4], y_cell[7], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[22]], (x_cell[5], y_cell[7], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[42]], (x_cell[6], y_cell[7], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[28]], (x_cell[4], y_cell[8], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[5]], (x_cell[5], y_cell[8], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[24]], (x_cell[6], y_cell[8], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[48]], (x_cell[4], y_cell[9], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[26]], (x_cell[5], y_cell[9], the_stickers, the_stickers))
+    pygame.draw.rect(cube_show, cube_colors[cube[45]], (x_cell[6], y_cell[9], the_stickers, the_stickers))
+    
+    pygame.display.flip()
+    move_clock.tick(FPS)
+
+
+# rotate_stickers() swaps four of the integers ("stickers") in cube
+def rotate_stickers(a, b, c, d):
+    cube[a], cube[b], cube[c], cube[d] = cube[d], cube[a], cube[b], cube[c]
+
+
+# up_turn(), front_turn(), etc. will "turn" a face of the puzzle clockwise by moving specific "stickers" in cube
+def up_turn():
+    rotate_stickers(12, 10, 8, 6)
+    rotate_stickers(13, 11, 9, 7)
+    rotate_stickers(39, 36, 33, 30)
+    rotate_stickers(40, 37, 34, 31)
+    rotate_stickers(41, 38, 35, 32)
+
+
+def front_turn():
+    rotate_stickers(6, 15, 22, 20)
+    rotate_stickers(7, 14, 23, 21)
+    rotate_stickers(30, 44, 51, 40)
+    rotate_stickers(31, 43, 53, 41)
+    rotate_stickers(32, 42, 52, 39)
+
+
+def right_turn():
+    rotate_stickers(8, 17, 24, 14)
+    rotate_stickers(9, 16, 25, 15)
+    rotate_stickers(30, 35, 45, 43)
+    rotate_stickers(31, 33, 47, 42)
+    rotate_stickers(32, 34, 46, 44)
+
+
+def back_turn():
+    rotate_stickers(10, 19, 26, 16)
+    rotate_stickers(11, 18, 27, 17)
+    rotate_stickers(33, 38, 48, 46)
+    rotate_stickers(34, 36, 50, 45)
+    rotate_stickers(35, 37, 49, 47)
+
+
+def left_turn():
+    rotate_stickers(12, 21, 28, 18)
+    rotate_stickers(13, 20, 29, 19)
+    rotate_stickers(36, 41, 51, 49)
+    rotate_stickers(37, 39, 53, 48)
+    rotate_stickers(38, 40, 52, 50)
+
+
+def down_turn():
+    rotate_stickers(22, 24, 26, 28)
+    rotate_stickers(23, 25, 27, 29)
+    rotate_stickers(42, 45, 48, 51)
+    rotate_stickers(43, 46, 49, 52)
+    rotate_stickers(44, 47, 50, 53)
+
+
+# y_turn() rotates the entire puzzle 90 degrees clockwise (like a U move)
+def y_turn():
+    up_turn()
+    rotate_stickers(4, 3, 2, 1)
+    rotate_stickers(20, 18, 16, 14)
+    rotate_stickers(21, 19, 17, 15)
+    for i in range(3):
+        down_turn()
+
+
+# z_flip() flips the cube upside down (like an F2 move)
+def z_flip():
+    for i in range(2):
+        front_turn()
+        rotate_stickers(0, 2, 5, 4)
+        rotate_stickers(8, 25, 28, 13)
+        rotate_stickers(9, 24, 29, 12)
+        back_turn()
+
+
+# cube_is_solved() returns True if puzzle is solved, returns False otherwise
+def cube_is_solved():
+    for i in [6, 8, 10, 12, 30, 33, 36, 39]:
+        if cube[i] != cube[0]:
+            return False
+    for i in [7, 14, 21, 23, 31, 41, 43, 53]:
+        if cube[i] != cube[1]:
+            return False
+    for i in [9, 15, 16, 25, 32, 34, 44, 46]:
+        if cube[i] != cube[2]:
+            return False
+    for i in [11, 17, 18, 27, 35, 37, 47, 49]:
+        if cube[i] != cube[3]:
+            return False
+    for i in [13, 19, 20, 29, 38, 40, 50, 52]:
+        if cube[i] != cube[4]:
+            return False
+    for i in [22, 24, 26, 28, 42, 45, 48, 51]:
+        if cube[i] != cube[5]:
+            return False
+    return True
+
+
+# cube_is_solvable() returns True if the puzzle is very likely solvable
+def cube_is_solvable():
+    if cube.count(1) != 9 or cube.count(2) != 9 or cube.count(3) != 9 or \
+            cube.count(4) != 9 or cube.count(5) != 9 or cube.count(7) != 9:
+        return False
+    for i in [2, 3, 4, 5, 6, 12, 20, 10, 14, 21, 28, 35]:
+        if location_of_edge(i) == 0:
+            return False
+    for i in [6, 12, 20, 10, 42, 84, 140, 70]:
+        if location_of_corner(i) == 0:
+            return False
+    return True  # cube is solvable
+
+
+# direction() takes a number (representing clockwise moves) and returns the correct direction notation
+def direction(turns):
+    if turns % 4 == 1 or turns % 4 == -3:
+        return ""
+    elif abs(turns % 4) == 2:
+        return "2"
+    elif turns % 4 == 3 or turns % 4 == -1:
+        return "'"
+    else:
+        return "0"
+
+
+# optimize_algorithm() takes a list of valid moves, and optimizes it (removes redundant and regressive moves)
+def optimize_algorithm(moves):
+    i = 1
+    while i < len(moves):
+        if len(moves[i]) == 1:
+            distance = 1
+        elif moves[i][1] == "2":
+            distance = 2
+        else:
+            distance = 3
+        if i == 1:
+            if moves[i][0] == moves[i - 1][0]:
+                if len(moves[i - 1]) == 1:
+                    distance += 1
+                elif moves[i - 1][1] == "2":
+                    distance += 2
+                else:
+                    distance += 3
+                del moves[i]
+                if distance % 4 > 0:
+                    moves[i - 1] = moves[i - 1][0] + direction(distance)
+                else:
+                    del moves[i - 1]
+                    if i > 1:
+                        i -= 1
+            else:
+                i += 1
+        elif i > 1:
+            if moves[i][0] == moves[i - 1][0]:
+                if len(moves[i - 1]) == 1:
+                    distance += 1
+                elif moves[i - 1][1] == "2":
+                    distance += 2
+                else:
+                    distance += 3
+                del moves[i]
+                if distance % 4 > 0:
+                    moves[i - 1] = moves[i - 1][0] + direction(distance)
+                else:
+                    del moves[i - 1]
+                    if i > 1:
+                        i -= 1
+            elif moves[i][0] == moves[i - 2][0] \
+                and (moves[i][0] == "U" and moves[i - 1][0] == "D" or moves[i][0] == "D" and moves[i - 1][0] == "U" or
+                     moves[i][0] == "F" and moves[i - 1][0] == "B" or moves[i][0] == "B" and moves[i - 1][0] == "F" or
+                     moves[i][0] == "R" and moves[i - 1][0] == "L" or moves[i][0] == "L" and moves[i - 1][0] == "R"):
+                if len(moves[i - 2]) == 1:
+                    distance += 1
+                elif moves[i - 2][1] == "2":
+                    distance += 2
+                else:
+                    distance += 3
+                del moves[i]
+                if distance % 4 > 0:
+                    moves[i - 2] = moves[i - 2][0] + direction(distance)
+                else:
+                    del moves[i - 2]
+                    i -= 1
+            else:
+                i += 1
+    return moves
+
+
+# turn() takes a list of moves and turns a face of the puzzle 90, 180, or 270 degrees clockwise for each move
+# turn() will also store each move into the solution list in relation to the puzzle's original orientation
+def turn(moves):
+    face = 26  # this is only here to get rid of a silly warning
+    for move in moves:
+        if len(move) == 1:
+            distance = 1  # 90 clockwise
+        elif move[1] == "2":
+            distance = 2  # 180 clockwise
+        else:
+            distance = 3  # 270 clockwise (90 counterclockwise)
+        for i in range(distance):
+            if move[0] == "U":
+                face = 0
+                up_turn()
+            elif move[0] == "F":
+                face = 1
+                front_turn()
+            elif move[0] == "R":
+                face = 2
+                right_turn()
+            elif move[0] == "B":
+                face = 3
+                back_turn()
+            elif move[0] == "L":
+                face = 4
+                left_turn()
+            elif move[0] == "D":
+                face = 5
+                down_turn()
+            else:
+                print "Invalid face -", move
+                return
+        original_orientation_turn = original_faces[cube[face]][0] + direction(distance)
+        solution.append(original_orientation_turn)  # appends translated move to solution algorithm
+        print move,
+    print
+
+
+# corner_id() takes corner location 1-8 and returns corner ID at that location
+def corner_id(location):
+    if location not in range(1, 9):
+        print "Invalid corner location."
+        return
+    sticker = (location + 9) * 3
+    return cube[sticker] * cube[sticker + 1] * cube[sticker + 2]
+
+
+# edge_id() takes edge location 1-12 and returns edge ID at that location
+def edge_id(location):
+    if location not in range(1, 13):
+        print "Invalid edge location."
+        return
+    sticker = (location + 2) * 2
+    return cube[sticker] * cube[sticker + 1]
+
+
+# orientation_of_corner() takes corner location 1-8 and returns 1, 2, or 3 (orientation of corner at that location)
+def orientation_of_corner(location):
+    if location not in range(1, 9):
+        print "Invalid location of corner for orientation analysis."
+    sticker = (location + 9) * 3
+    for i in range(1, 4):
+        if cube[sticker] == 1 or cube[sticker] == 7:
+            return i  # orientation 1 means white/yellow on top/bottom, 2 means white/yellow to left, 3 means to right
+        else:
+            sticker += 1
+    print "Something wrong in orientation_of_corner()"
+
+
+# orientation_of_edge() takes edge location 1-12 and returns 1 or 2 (orientation of edge at that location)
+def orientation_of_edge(location):
+    if location not in range(1, 13):
+        print "Invalid location of edge for orientation analysis."
+    sticker = (location + 2) * 2
+    if cube[sticker] == 7 or cube[sticker] == 1:
+        return 1
+    elif cube[sticker + 1] == 7 or cube[sticker + 1] == 1:
+        return 2
+    if cube[sticker] < cube[sticker + 1] and edge_id(location) != 10 or \
+            edge_id(location) == 10 and cube[sticker] > cube[sticker + 1]:
+        return 1
+    else:
+        return 2
+
+
+# position_of_corner() takes corner ID 6, 12, 20, 10, 42, 84, 140, or 70 and returns corner location
+def location_of_corner(corner):
+    for sticker in range(30, 54, 3):
+        if corner == cube[sticker] * cube[sticker + 1] * cube[sticker + 2]:
+            return sticker / 3 - 9
+    print "Corner", corner, "doesn't exist."
+    return 0
+
+
+# position_of_edge() takes edge ID 2, 3, 4, 5, 6, 12, 20, 10, 14, 21, 28, or 35 and returns edge location
+def location_of_edge(edge):
+    for sticker in range(6, 30, 2):
+        if edge == cube[sticker] * cube[sticker + 1]:
+            return sticker / 2 - 2
+    print "Edge", edge, "doesn't exist."
+    return 0
+
+
+# step_seven() orients/solves bottom layer corners; the puzzle
+def step_seven():
+    print "\nSTEP SEVEN - orienting the last layer corners!"
+    good_corners = 0
+    while orientation_of_corner(4) == 1:
+        y_turn()
+        good_corners += 1
+    if good_corners > 0:
+        print "Y" + direction(good_corners)
+    while good_corners < 4:
+        if orientation_of_corner(4) == 3:
+            print "(The top-left corner needs to be oriented counterclockwise)",
+            turn(["D", "L", "D'", "L'", "D", "L", "D'", "L'"])
+        elif orientation_of_corner(4) == 2:
+            print "(The top-left corner needs to be reoriented clockwise)",
+            turn(["L", "D", "L'", "D'", "L", "D", "L'", "D'"])
+        ups = 0
+        while orientation_of_corner(4) == 1 and not cube_is_solved():
+            up_turn()
+            ups += 1
+            good_corners += 1
+        for i in range(4 - ups % 4):
+            up_turn()
+        turn(["U" + direction(ups)])
+
+
+# step_six() permutes bottom layer corners
+def step_six():
+    for i in range(4):
+        if corner_id(1) == cube[0] * cube[1] * cube[2]:
+            y_turn()
+        else:
+            for j in range(4 - i):
+                y_turn()
+            break
+    else:
+        print "\nWe can skip step six, the last layer corners are in position!"
+        return
+    print "\nSTEP SIX - Permuting the last layer corners!"
+    rotations = 0
+    for i in range(8):
+        if corner_id(1) != cube[0] * cube[1] * cube[2]:
+            y_turn()
+        else:
+            rotations = i % 4
+            break
+        if i == 3:
+            print "(None of the corners are permuted correctly)"
+            turn(["U", "R", "U'", "L'", "U", "R'", "U'", "L"])
+    if rotations > 0:
+        print "Y" + direction(rotations)
+    if corner_id(2) == cube[0] * cube[3] * cube[4]:
+        turn(["U", "R", "U'", "L'", "U", "R'", "U'", "L"])
+    else:
+        turn(["U'", "F'", "U", "B", "U'", "F", "U", "B'"])
+
+
+# step_five() permutes/solves bottom layer edges
+def step_five():
+    for i in range(4):
+        if cube[9] - cube[7] == -1 or cube[9] - cube[7] == 3:
+            up_turn()
+        else:
+            for j in range(4 - i):
+                up_turn()
+            break
+    else:
+        distance = location_of_edge(7 * cube[1]) - 1
+        if distance > 0:
+            turn(["U" + direction(distance)])
+        print "\nWe can skip step five, the last layer edges are oriented correctly!"
+        return
+    print "\nSTEP FIVE - permuting the last layer edges!"
+    if (cube[7] + cube[11]) % 2 == 0:  #
+        distance = location_of_edge(7 * cube[1]) - 1
+        if distance > 0:
+            turn(["U" + direction(distance)])
+        turn(["L'", "U'", "L", "U", "L", "F'", "L2", "U", "L", "U", "L'", "U'", "L", "F"])
+        return
+    for i in range(4):
+        if edge_id(1) - edge_id(2) in [-7, 21]:  # if edges at edge locations 1 and 2 need to be swapped
+            if i > 0:
+                print "Y" + direction(i)
+            break
+        else:
+            y_turn()
+    turn(["R", "U2", "R'", "U'", "R", "U'", "R'", "U'"])
+    for i in range(4):
+        if cube[i * 2 + 7] == cube[1]:
+            if i > 0:
+                turn(["U" + direction(i)])
+            return
+
+
+# step_four() orients bottom layer edges
+def step_four():
+    for i in range(1, 5):
+        if orientation_of_edge(i) != 1:
+            break
+    else:
+        print "\nWe can skip step four, there's already a \"cross\" on the last layer!"
+        return
+    print "\nSTEP FOUR - making a \"cross\" on the last layer!"
+    for i in range(1, 5):
+        if orientation_of_edge(i) == 1:
+            break
+    else:
+        print "(Turn the \"dot\" into a \"line\")"
+        turn(["F", "U", "R", "U'", "R'", "F'"])
+    if cube[6] == cube[10]:
+        print "Y"
+        y_turn()
+    if cube[12] == cube[8]:
+        print "(Turn the \"line\" into a \"cross\")"
+        turn(["F", "R", "U", "R'", "U'", "F'"])
+        return
+    if cube[6] == cube[12]:
+        print "Y"
+        y_turn()
+    elif cube[6] == cube[8]:
+        print "Y2"
+        y_turn()
+        y_turn()
+    elif cube[8] == cube[10]:
+        print "Y'"
+        y_turn()
+        y_turn()
+        y_turn()
+    print "(Turn the \"arrow\" into a \"cross\")"
+    turn(["F", "U", "R", "U'", "R'", "F'"])
+
+
+# step_three() solves middle layers edges
+def step_three():
+    print "\nSTEP THREE - solving the second layer edges!\n" \
+          "At this point, you will need to flip the cube upside down. " \
+          "Please rotate the entire cube as if you were performing an F2 move."
+    z_flip()
+    for edge in [10, 20, 12, 6]:
+        if location_of_edge(edge) == 5:
+            if orientation_of_edge(5) == 1:
+                turn(["F2", "U2", "R'", "F2", "R", "U2", "F", "U'", "F"])
+        elif location_of_edge(edge) > 5:
+            distance = location_of_edge(edge) - 5
+            print "Y" + direction(distance)
+            for i in range(distance):
+                y_turn()
+            turn(["U'", "F'", "U", "F", "U", "R", "U'", "R'"])
+            print "Y" + direction(4 - distance)
+            for i in range(4 - distance):
+                y_turn()
+        if location_of_edge(edge) < 5:
+            distance = (location_of_edge(edge) - orientation_of_edge(location_of_edge(edge)) + 4) % 4
+            if distance > 0:
+                turn(["U" + direction(distance)])
+            print "(Permute the edge correctly into the front-right position)",
+            if location_of_edge(edge) == 1:
+                turn(["U", "R", "U'", "R'", "U'", "F'", "U", "F"])
+            else:
+                turn(["U'", "F'", "U", "F", "U", "R", "U'", "R'"])
+        print "Y"
+        y_turn()
+
+
+# step_two() solves top layer corners
+def step_two():
+    print "STEP TWO - solving the first layer corners!"
+    for i in range(4):
+        if corner_id(1) < 42 and (cube[30] != cube[0] or cube[31] != cube[1]):
+            for j in range(5, 9):
+                if corner_id(j) > 20:
+                    if 9 - j < 4:
+                        turn(["D" + direction(9 - j)])
+                    break
+            turn(["R'", "D'", "R"])
+        print "Y"
+        y_turn()
+    for corner in [6, 12, 20, 10]:
+        if corner != corner_id(1) or orientation_of_corner(1) != 1:
+            for i in range(5, 9):
+                if location_of_corner(corner) == i:
+                    if 9 - i < 4:
+                        turn(["D" + direction(9 - i)])
+                    break
+            print "(Permute the corner correctly into the top-right position)",
+            if orientation_of_corner(5) == 3:
+                turn(["R'", "D'", "R"])
+            elif orientation_of_corner(5) == 2:
+                turn(["F", "D", "F'"])
+            else:
+                turn(["R'", "B'", "D2", "B", "R"])
+        print "Y"
+        y_turn()
+
+
+# step_one() solves top layer edges
+def step_one():
+    print "STEP ONE - solving the first layer edges!"
+    
+    for edge in [2, 3, 4, 5]:
+        if location_of_edge(edge) < 5 and orientation_of_edge(location_of_edge(edge)) is 1:
+            distance = (location_of_edge(edge) - edge + 5) % 4
+            if distance != 0:
+                turn(["U" + direction(distance)])
+            break
+    for edge in [2, 3, 4, 5]:
+        if location_of_edge(edge) == 1:
+            if orientation_of_edge(location_of_edge(edge)) == 2:
+                turn(["F", "U'", "R", "U"])
+            else:
+                print "(This edge is oriented correctly)"
+        elif location_of_edge(edge) > 8:
+            distance = (13 - location_of_edge(edge)) % 4
+            if distance != 0:
+                turn(["D" + direction(distance)])
+            print "(Permute the edge correctly into the top layer)",
+            if orientation_of_edge(location_of_edge(edge)) is 1:
+                turn(["F2"])
+            else:
+                turn(["F'", "U'", "R", "U"])
+        else:
+            if location_of_edge(edge) < 5:
+                if location_of_edge(edge) == 2:
+                    turn(["R'"])
+                elif location_of_edge(edge) == 3:
+                    turn(["B'"])
+                else:
+                    turn(["L"])
+            distance = (7 - location_of_edge(edge) + orientation_of_edge(location_of_edge(edge))) % 4
+            if distance != 0:
+                turn(["U" + direction(distance)])
+            for i in range((4 - distance) % 4):
+                print "Y",
+                y_turn()
+            if orientation_of_edge(location_of_edge(edge)) == 1:
+                turn(["F"])
+            else:
+                turn(["F'"])
+            for i in range(distance):
+                print "Y",
+                y_turn()
+            if (4 - distance) != 4:
+                turn(["U" + direction(4 - distance)])
+        print "Y"
+        y_turn()
+
+
+# helpful_info() outputs helpful information for the user to read
+def helpful_info():
+    print "\n\tGETTING STARTED: To answer questions in this program, type \"y\" to answer yes, then press Enter.\n" \
+          "\tAnything that doesn't start with a \"y\" will be interpreted as a \"no\".\n\n" \
+          "\tTHE RUBIK'S CUBE: The faces of a Rubik's cube are Up, Front, Right, Back, Left, and Down.\n" \
+          "\tYou can turn any one of these faces by twisting them like the lid on a pickle jar.\n" \
+          "\tThe center stickers on each of the faces of the cube never move. This means that the color\n" \
+          "\tof each center sticker will determine what color each face will be when the cube is solved.\n\n" \
+          "\tALGORITHMS: A \"turn\" or \"move\" consists of twisting one of the six faces of the cube.\n" \
+          "\tA face can be turned clockwise 90 degrees, counterclockwise 90 degrees, or 180 degrees.\n" \
+          "\tHere are some examples of the notation:\n" \
+          "\t\tU  - turn the Up face clockwise\n" \
+          "\t\tF' - turn the Front face counterclockwise\n" \
+          "\t\tR2 - turn the Right face 180 degrees\n" \
+          "\tAn algorithm will look something like this: B R2 F L' F2 U' D etc.\n" \
+          "\tWhen I walk you through the solving process, I'll say \"Y\" occasionally.\n" \
+          "\t\"Y\" means to rotate the entire puzzle as if performing a U move.\n" \
+          "\tHowever, that isn't the fun part of this program, so you don't need to worry about it.\n\n" \
+          "\tI hope this was helpful to you. Please resume the program."
+
+
+# get_input() prevents user from inputting empty strings, helps user, or quits the program
+def get_input():
+    user_input = raw_input().upper()
+    if len(user_input) < 1:
+        return get_input()  # recursive call to avoid bad input
+    elif user_input[0] == "H":
+        helpful_info()
+        return get_input()
+    elif user_input == "QUIT":
+        print "\nGoodbye!"
+        pygame.quit()
+        sys.exit()
+    else:
+        return user_input
+
+
+# move_is_invalid() returns True if move is NOT an acceptable turn of the puzzle
+def move_is_invalid(move):
+    if len(move) not in (1, 2):  # if length is invalid
+        return True
+    elif move[0] not in ("U", "F", "R", "B", "L", "D"):  # if face is invalid
+        return True
+    elif len(move) == 1:  # if move is valid clockwise turn
+        return False
+    elif move[1] in ("2", "'"):  # if degree is counterclockwise or 180 degree turn
+        return False
+    else:
+        return True  # move is invalid
+
+
+# get_user_algorithm() prompts user for an algorithm
+def get_user_algorithm():
+    global algorithm
+    while len(algorithm) < 20:
+        print "\nPlease enter an algorithm of 20+ moves:"
+        algorithm = get_input().split()
+        if len(algorithm) < 20:
+            print "Algorithm too short, try again."
+        else:
+            i = 0
+            while i < len(algorithm):
+                if move_is_invalid(algorithm[i]):
+                    print "Invalid move:", algorithm[i]
+                    del algorithm[i]
+                else:
+                    i += 1
+            algorithm = optimize_algorithm(algorithm)
+            print "\nI have optimized your algorithm.",
+            if len(algorithm) < 20:
+                print "The optimized algorithm is too short."
+
+
+# generate_algorithm() stores numbers 0-5 into algorithm[], then converts numbers into valid non-repeating moves
+def generate_algorithm():
+    global algorithm
+    for i in range(25):  # utilizing optimize_algorithm() would be more labor intensive, hence these conditionals
+        algorithm.append(randint(0, 5))
+        if i == 0:
+            "nothing"  # first turn can be any face
+        elif i == 1 or algorithm[i - 1] % 3 != algorithm[i - 2] % 3:
+            while algorithm[i] == algorithm[i - 1]:
+                algorithm[i] = randint(0, 5)  # do not repeat previous face
+        else:
+            while algorithm[i] % 3 == algorithm[i - 1] % 3:
+                algorithm[i] = randint(0, 5)  # last two turns were independent of each other, do not repeat either face
+    for index, i in enumerate(algorithm):
+        if i is 0:
+            face = "F"
+        elif i is 1:
+            face = "L"
+        elif i is 2:
+            face = "U"
+        elif i is 3:
+            face = "B"
+        elif i is 4:
+            face = "R"
+        else:
+            face = "D"
+        algorithm[index] = face + direction(randint(1, 3))
+
+
+# get_colors() allows user to choose the colors of the stickers during the solve display
+def get_colors():
+    print "\nDo you want default sticker colors?"
+    if get_input()[0] == "Y":
+        cube_colors.update({1: (255, 255, 255), 2: (255, 0, 0), 3: (0, 0, 255),
+                            4: (255, 128, 0), 5: (0, 255, 0), 7: (255, 255, 0)})
+        return
+    
+    quality = 2  # quality can be 0-5
+    options = 2**(quality+1) - 1
+    w = 128 / (options+1)
+    rate = 255 / options
+    color_show = pygame.display.set_mode((6*options*w, 2*options*w+w))
+    for z in range(6):
+        for y in range(1, options+1):
+            for x in range(options):
+                rgb_row1 = (x*w+z*options*w, y*w, w, w)
+                rgb_row2 = (x*w+z*options*w, y*w+options*w, w, w)
+                if z == 0:
+                    pygame.draw.rect(color_show, (y*rate, min(x*rate, y*rate), 0), rgb_row1)  # black to color
+                    pygame.draw.rect(color_show, (255, max(x*rate, y*rate), y*rate), rgb_row2)  # color to white
+                elif z == 1:
+                    pygame.draw.rect(color_show, (min(255-x*rate, y*rate), y*rate, 0), rgb_row1)
+                    pygame.draw.rect(color_show, (max(255-x*rate, y*rate), 255, y*rate), rgb_row2)
+                elif z == 2:
+                    pygame.draw.rect(color_show, (0, y*rate, min(x*rate, y*rate)), rgb_row1)
+                    pygame.draw.rect(color_show, (y*rate, 255, max(x*rate, y*rate)), rgb_row2)
+                elif z == 3:
+                    pygame.draw.rect(color_show, (0, min(255-x*rate, y*rate), y*rate), rgb_row1)
+                    pygame.draw.rect(color_show, (y*rate, max(255-x*rate, y*rate), 255), rgb_row2)
+                elif z == 4:
+                    pygame.draw.rect(color_show, (min(x*rate, y*rate), 0, y*rate), rgb_row1)
+                    pygame.draw.rect(color_show, (max(x*rate, y*rate), y*rate, 255), rgb_row2)
+                else:
+                    pygame.draw.rect(color_show, (y*rate, 0, min(255-x*rate, y*rate)), rgb_row1)
+                    pygame.draw.rect(color_show, (255, y*rate, max(255-x*rate, y*rate)), rgb_row2)
+    
+    pygame.display.flip()
+    pygame.display.set_caption("Pick Colors")
+    for face in original_faces:
+        print "\nPick the color that resembles the", original_faces[face], "face."
+        need_color = True
+        while need_color:
+            for event in pygame.event.get():
+                if pygame.mouse.get_pressed()[0]:
+                    while pygame.mouse.get_pressed()[0]:
+                        pygame.event.wait()
+                    selected_color = color_show.get_at((pygame.mouse.get_pos()))
+                    if selected_color == (0, 0, 0):
+                        selected_color = (16, 16, 16)
+                    if selected_color in cube_colors.values():
+                        print "Color already selected."
+                    else:
+                        cube_colors.update({len(cube_colors)+1+len(cube_colors)/5: selected_color})
+                        need_color = False
+                if event.type == "QUIT":
+                    pygame.display.quit()
+                    sys.exit()
+    pygame.display.quit()
+
+
+# get_abbreviations() takes input for each of the six colors on the user's cube, then calls get_colors()
+def get_abbreviations():
+    print "\nI'll need to know the six colors of your puzzle's faces.\n" \
+          "You'll be representing these colors with abbreviations (e.g. r for red).\n" \
+          "You will then click on a color that corresponds with each face color."
+    for value_of_color in range(1, 7):
+        if value_of_color is 6:
+            value_of_color = 7  # color values skip 6
+        print "\nWhat is the color of the center of the", original_faces[value_of_color], "face? (Abbreviate!)"
+        abbreviation = get_input().lower()
+        while abbreviation in color_abbreviations.keys():
+            print "You already assigned that color to the", original_faces[color_abbreviations[abbreviation]], "face."
+            abbreviation = get_input().lower()
+        color_abbreviations.update({abbreviation: value_of_color})
+    get_colors()
+
+
+# get_cube() takes user through a tedious process of entering all sticker positions of an unsolved puzzle
+def get_cube():
+    if len(color_abbreviations) != 6:
+        get_abbreviations()
+    print "\nI need the color of all eight stickers around the centers of every face. This might be tedious.\n" \
+          "Type in the colors of all eight* stickers of a face (separated by spaces) before hitting Enter.\n" \
+          "*I already know the color of the center stickers of each face, so I only want the other eight.\n" \
+          "Type in a face's sticker colors in clockwise order, starting with the top-middle sticker of the face.\n" \
+          "Read the Up face stickers from above (as you probably assumed), and the Front face from... the front.\n" \
+          "Perform Y moves (Enter \"help\" for algorithm info) to read the Right/Back/Left faces from the front.\n" \
+          "Orient the original Front face back to the front, then tip the cube forward to read the Down face."
+    for value_of_color, sticker in enumerate(([10, 33, 8, 30, 6, 39, 12, 36],
+                                              [7, 31, 14, 43, 23, 53, 21, 41],
+                                              [9, 34, 16, 46, 25, 44, 15, 32],
+                                              [11, 37, 18, 49, 27, 47, 17, 35],
+                                              [13, 40, 20, 52, 29, 50, 19, 38],
+                                              [22, 42, 24, 45, 26, 48, 28, 51]), 1):
+        if value_of_color == 6:
+            value_of_color = 7
+        current_face = original_faces[value_of_color]
+        sticker_colors = []
+        while len(sticker_colors) != 8:
+            print "\nTell me the 8 colors of the", current_face, "face."
+            sticker_colors = get_input().lower().split()
+            if len(sticker_colors) != 8:
+                print "Your counting was off.",
+            else:
+                for i, sticker_color in enumerate(sticker_colors):
+                    if sticker_color not in color_abbreviations.keys():
+                        print sticker_color, "is not a valid color.",
+                        del sticker_colors[:]
+                        break
+                    cube[sticker[i]] = color_abbreviations[sticker_color]
+    if cube_is_solvable() is False:
+        print "\nThe configuration you gave me creates an unsolvable cube. Please try again."
+        get_cube()
+    else:
+        print "\nWow, you actually did it. I mean... let's start solving your puzzle."
+
+
+# Main
+print "\n(Enter \"h\" if this is your first time using this program. Enter \"quit\" to end this program.)" \
+      "\nHi. I can solve Rubik's cubes (real or imaginary). Is your puzzle mixed up yet?"
+if get_input()[0] == "Y":
+    get_cube()
+else:
+    get_colors()
+    print "\nWould you like me to make a mixing algorithm for you?"
+    if get_input()[0] == "Y":
+        generate_algorithm()
+        print
+    else:
+        get_user_algorithm()
+    print "Apply this algorithm to a solved Rubik's cube, (if you have one)."
+    turn(algorithm)
+    print "\nI will now attempt to solve this puzzle. Please press Enter."
+    raw_input()
+
+del solution[:]  # empties solution before solving process begins
+mixed_cube = cube[:]
+
+for step in range(1, 8):
+    if cube_is_solved():
+        break
+    # raw_input()
+    if step == 1:
+        step_one()
+    elif step == 2:
+        step_two()
+    elif step == 3:
+        step_three()
+    elif step == 4:
+        step_four()
+    elif step == 5:
+        step_five()
+    elif step == 6:
+        step_six()
+    else:
+        step_seven()
+
+solution = optimize_algorithm(solution)
+if cube_is_solved() is False:
+    print "\nLooks like your Rubik's cube has been tampered with. Please consult a professional for help."
+    sys.exit()
+elif len(solution) is 0:
+    print "\nThis puzzle is already solved. Goodbye."
+    sys.exit()
+else:
+    print "\n# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #\n" \
+          "\nThe puzzle is now solved. Press Enter to get to the fun part (or look at the step-by-step details above)."
+    raw_input()
+
+print "It took", len(solution), "moves for me to solve your puzzle."
+if len(algorithm) > 0:
+    print "\nThis was the algorithm used to mix up the cube:"
+    print " ".join(algorithm)
+
+print "\nThis is the optimized solution (divided into several lines and numbered to help you keep your place):",
+for n, m in enumerate(solution):
+    if n % 20 == 0:
+        print "\n%i)" % (n / 20 + 1),
+    print m,
+
+print "\n\n# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #\n"
+
+final_solution = solution[:]
+pygame.display.init()
+pygame.font.init()
+cube_show = pygame.display.set_mode((screen_width, screen_height))
+pygame.draw.rect(cube_show, (0, 255, 0), (5, screen_height-55, 125, 50))
+pygame.draw.rect(cube_show, (255, 0, 0), (135, screen_height-55, 125, 50))
+text = pygame.font.SysFont("yugothic", 36)
+label = text.render("Solve      End", 1, (0, 0, 0))
+cube_show.blit(label, (25, screen_height - 47))
+pygame.display.set_caption("Solving the Cube")
+pygame.display.flip()
+
+running = True
+while running:
+    for main_event in pygame.event.get():
+        if pygame.mouse.get_pressed()[0]:
+            while pygame.mouse.get_pressed()[0]:
+                pygame.event.wait()
+            if 5 <= pygame.mouse.get_pos()[0] < 130 and 5 <= screen_height - pygame.mouse.get_pos()[1] <= 55:
+                cube = mixed_cube[:]
+                draw_cube()
+                wait = True
+                while wait:
+                    pygame.event.get()
+                    if pygame.mouse.get_pressed()[0]:
+                        while pygame.mouse.get_pressed()[0]:
+                            pygame.event.wait()
+                        wait = False
+                while pygame.mouse.get_pressed()[0] is False:
+                    pygame.event.wait()
+                for n in range(len(final_solution)):
+                    pygame.event.get()
+                    turn([final_solution[n]])  # use final_solution, turn() adds moves to--and thus ruins--solution
+                    draw_cube()
+            elif 135 <= pygame.mouse.get_pos()[0] < 260 and 5 <= screen_height - pygame.mouse.get_pos()[1] <= 55:
+                print "\nThank you for letting me solve this puzzle :)",
+                running = False
+pygame.quit()
+sys.exit()
